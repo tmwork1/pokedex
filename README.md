@@ -1,38 +1,39 @@
-# pokemon_home_SV
-## インストール
+# pokedex
+次のデータファイルを作成する
+- ポケモン全国図鑑
+- ポケモンHOMEのランクマッチ使用率
+- ポケモン用語の和名と外国語名の対応表
+
+### ダウンロード
 ```
-git clone https://github.com/tmwork1/pokemon_home_SV.git
+git clone https://github.com/tmwork1/pokedex.git
 ```
 
-## 使い方
-全国図鑑を生成する
+### 使い方
+全国図鑑の生成
 ```
 python create_zukan.py
 ```
 
-ランクマッチ使用率の一覧を生成する
+ランクマッチ使用率の生成
 ```
 python create_battle_data.py
 ```
 
-日本語 <-> 外国語名の対応表を生成する
+言語対応表の生成
 ```
 python create_translation_table.py
 ```
 
-### ランクマッチ使用率はこちらからダウンロードすることもできます
-(例) シーズン28  
-https://pbasv.cloudfree.jp/download/home/season28.json  
-https://pbasv.cloudfree.jp/download/home/season28.csv
-
 ## 出力形式
-json/csv
+JSON形式 : output/json/
+CSV形式  : output/csv/
 
 ## 引用
-ポケモンHOME (API使用)
-
 ポケモンずかん  
 https://zukan.pokemon.co.jp/
 
 ポケモンWiki  
 https://wiki.xn--rckteqa2e.com/wiki/%E3%83%A1%E3%82%A4%E3%83%B3%E3%83%9A%E3%83%BC%E3%82%B8
+
+ポケモンHOME (API使用)
