@@ -20,16 +20,16 @@ python create_zukan.py
 python create_battle_data.py
 ```
 
-言語対応表の生成
+用語翻訳表の生成
 ```
 python create_translation_table.py
 ```
 
-## 出力形式
-JSON形式 : output/json/
-CSV形式  : output/csv/
+### 出力形式
+JSON形式 : output/json/  
+CSV形式 : output/csv/
 
-## 引用
+### 引用
 ポケモンずかん  
 https://zukan.pokemon.co.jp/
 
