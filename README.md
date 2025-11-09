@@ -1,5 +1,5 @@
 # pokedex
-次のデータファイルを作成する
+以下のデータファイルを作成するPythonスクリプト群
 - ポケモン全国図鑑
 - ポケモンHOMEのランクマッチ使用率
 - ポケモン用語の和名と外国語名の対応表
@@ -15,7 +15,7 @@ git clone https://github.com/tmwork1/pokedex.git
 python create_zukan.py
 ```
 
-ランクマッチ使用率の生成
+ランクマッチ使用率データの生成
 ```
 python create_battle_data.py
 ```
@@ -26,8 +26,8 @@ python create_translation_table.py
 ```
 
 ### 出力形式
-JSON形式 : output/json/  
-CSV形式 : output/csv/
+JSON : output/json/  
+CSV : output/csv/
 
 ### 引用
 ポケモンずかん  
