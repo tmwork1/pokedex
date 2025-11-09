@@ -349,16 +349,11 @@ def load_zukan() -> dict:
 
 
 if __name__ == '__main__':
-    if False:
-        # 1) ポケモンHOMEの内部データからデータ取得
-        zukan = create_zukan_from_HOME()
+    # 1) ポケモンHOMEの内部データからデータ取得
+    zukan = create_zukan_from_HOME()
 
-        # 2) 公式の図鑑サイトからデータ取得 [かなり時間がかかる]
-        update_zukan_with_official_dex(zukan)
-
-        # dump(zukan)  # 中間出力 (任意)
-
-    zukan = load_zukan()  # 途中から再開 (任意)
+    # 2) 公式の図鑑サイトからデータ取得 [かなり時間がかかる]
+    update_zukan_with_official_dex(zukan)
 
     # 3) ポケモンWikiからデータ取得 [すこし時間がかかる]
     update_zukan_with_wiki(zukan)
