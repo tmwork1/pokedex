@@ -20,7 +20,7 @@ python create_zukan.py
 python create_battle_data.py
 ```
 
-用語翻訳表の生成
+言語対応表の生成
 ```
 python create_translation_table.py
 ```

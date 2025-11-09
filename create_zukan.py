@@ -1,23 +1,53 @@
 from alias import *
 import json
 import re
-import os
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import mojimoji
 
 
-def read_HOME() -> dict:
-    """ポケモンHOMEの内部データをもとに図鑑の辞書を作成"""
-    # 名前を読み込む
-    with open(f'raw/bundle.js', encoding='utf-8') as fin:
+# zkn_form_ja.jsonに含まれないフォルム
+additional_forms = {
+    'コオリッポ': ['アイスフェイス', 'ナイスフェイス'],
+    'イルカマン': ['ナイーブフォルム', 'マイティフォルム'],
+    'シャリタツ': ['そったすがた', 'たれたすがた', 'のびたすがた'],
+    'オーガポン': ['みどりのめん', 'いどのめん', 'かまどのめん', 'いしずえのめん'],
+}
+
+# 公式図鑑にない情報
+forms = ['ちいさいサイズ', 'ふつうのサイズ', 'おおきいサイズ', 'とくだいサイズ']
+bakeccha_weight = {form: v for form, v in zip(forms, [3.5, 5, 7.5, 15])}
+bakeccha_height = {form: v for form, v in zip(forms, [0.3, 0.4, 0.5, 0.8])}
+panpujin_weight = {form: v for form, v in zip(forms, [9.5, 12.5, 14, 39])}
+panpujin_height = {form: v for form, v in zip(forms, [0.7, 0.9, 1.1, 1.7])}
+
+# 古い世代から順
+wiki_urls = [
+    'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B8%80%E4%B8%96%E4%BB%A3)',
+    '',
+    'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B8%89%E4%B8%96%E4%BB%A3)',
+    'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E5%9B%9B%E4%B8%96%E4%BB%A3)',
+    'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%BA%94%E4%B8%96%E4%BB%A3)',
+    'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E5%85%AD%E4%B8%96%E4%BB%A3)',
+    'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B8%83%E4%B8%96%E4%BB%A3)',
+    'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E5%85%AB%E4%B8%96%E4%BB%A3)',
+    'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B9%9D%E4%B8%96%E4%BB%A3)',
+]
+
+
+def create_zukan_from_HOME() -> dict:
+    """
+    ポケモンHOMEの内部データを解析して図鑑データを作成する
+    """
+    # ポケモンの名前を読み込む
+    with open(f'data/bundle.js', encoding='utf-8') as fin:
         ls = re.findall(r'poke:\[(.*?)\]', fin.read())
         names = ls[0].split(',')
-        names = [s[1:-1] for s in names] # ""を除去
+        names = [s[1:-1] for s in names]  # ""を除去
 
-    # フォルムを読み込む
-    with open(f'raw/zkn_form_ja.json', encoding='utf-8') as fin:
+    # フォルム情報を読み込む
+    with open(f'data/zkn_form_ja.json', encoding='utf-8') as fin:
         dict = json.load(fin)
         forms = {}
         for key in dict['zkn_form'].keys():
@@ -30,23 +60,18 @@ def read_HOME() -> dict:
                 forms[id] = {}
             forms[id][form_id] = dict['zkn_form'][key]
 
-    # zkn_form_ja.jsonに含まれないフォルムを追加
-    other_forms = {
-        'コオリッポ': ['アイスフェイス', 'ナイスフェイス'],
-        'イルカマン': ['ナイーブフォルム', 'マイティフォルム'],
-        'シャリタツ': ['そったすがた', 'たれたすがた', 'のびたすがた'],
-        'オーガポン': ['みどりのめん', 'いどのめん', 'かまどのめん', 'いしずえのめん'],
-    }
-    for name in other_forms:
+    # 登録されていないフォルムを追加
+    for name in additional_forms:
         id = names.index(name) + 1
         forms[str(id)] = {}
-        for form_id, form in enumerate(other_forms[name]):
+        for form_id, form in enumerate(additional_forms[name]):
             forms[str(id)][str(form_id)] = form
 
-    # 辞書に格納. key = "図鑑番号(4桁)-フォルム番号(3桁)"
+    # 図鑑の辞書に格納する
+    # key = "図鑑番号(4桁)-フォルム番号(3桁)"
     zukan = {}
 
-    for i,name in enumerate(names):
+    for i, name in enumerate(names):
         id = i + 1
 
         key = f"{id:04}-{0:03}"
@@ -55,7 +80,7 @@ def read_HOME() -> dict:
 
         if str(id) not in forms or '0' not in forms[str(id)]:
             zukan[key]['id'] = id
-            zukan[key]['form_id'] = 0
+            zukan[key]['form-id'] = 0
             zukan[key]['name'] = name
             zukan[key]['form'] = ''
             zukan[key]['alias'] = alias(zukan[key])
@@ -67,14 +92,14 @@ def read_HOME() -> dict:
                 key = f"{id:04}-{int(form_id):03}"
                 dict = {}
                 dict['id'] = id
-                dict['form_id'] = int(form_id)
+                dict['form-id'] = int(form_id)
                 dict['name'] = name
                 dict['form'] = forms[str(id)][form_id]
                 dict['alias'] = alias(dict)
 
                 # aliasが重複していればスキップ
-                if dict['alias'] in aliases:
-                    print(f"{dict['alias']} {dict['form']} が重複しているためスキップ")
+                if (s := dict['alias']) in aliases:
+                    print(f"Duplicated alias : {s}")
                     continue
 
                 zukan[key] = dict
@@ -82,91 +107,93 @@ def read_HOME() -> dict:
 
     return zukan
 
-def read_official_zukan(zukan: dict):
-    """公式の図鑑サイトから情報を取得"""
-    # 公式の図鑑サイトで使われているタイプコードを読み込む
-    with open(f'raw/zukan_type.json', encoding='utf-8') as fin:
+
+def update_zukan_with_official_dex(zukan: dict):
+    """
+    公式の図鑑サイトから情報を取得して図鑑データに追記する
+    """
+    # 公式図鑑で使われているタイプコードを読み込む
+    with open(f'data/zukan_type.json', encoding='utf-8') as fin:
         zukan_types = [''] + list(json.load(fin).keys())
-
-    # 公式の図鑑にない情報
-    bakeccha_weight = {'ちいさいサイズ': 3.5,'ふつうのサイズ': 5,'おおきいサイズ': 7.5,'とくだいサイズ': 15}
-    bakeccha_height = {'ちいさいサイズ': 0.3,'ふつうのサイズ': 0.4,'おおきいサイズ': 0.5,'とくだいサイズ': 0.8}
-
-    panpujin_weight = {'ちいさいサイズ': 9.5,'ふつうのサイズ': 12.5,'おおきいサイズ': 14,'とくだいサイズ': 39}
-    panpujin_height = {'ちいさいサイズ': 0.7,'ふつうのサイズ': 0.9,'おおきいサイズ': 1.1,'とくだいサイズ': 1.7}
 
     # 公式の図鑑サイトから情報を取得
     prev_id, prev_form_id = 0, 0
 
-    for key, dict in zukan.items():
+    for key in zukan:
+        data = zukan[key]
+
         # 初期化
-        zukan[key]['category'] = ''
-        zukan[key]['weight'] = 0
-        zukan[key]['height'] = 0
-        for k in ['type_1', 'type_2']:
-            zukan[key][k] = ''
-        for k in ['ability_1', 'ability_2', 'ability_3']:
-            zukan[key][k] = ''
+        data['category'] = ''
+        data['weight'] = 0
+        data['height'] = 0
+        for k in ['type-1', 'type-2']:
+            data[k] = ''
+        for k in ['ability-1', 'ability-2', 'ability-3']:
+            data[k] = ''
 
-        url = f"https://zukan.pokemon.co.jp/detail/{dict['id']:04}"
+        url = f"https://zukan.pokemon.co.jp/detail/{data['id']:04}"
 
-        form_id = dict['form_id']
-        if form_id > 0:
-            if dict['id'] == prev_id and form_id != prev_form_id + 1:
-                form_id = prev_form_id + 1
-            url += f"-{form_id}"
+        # フォルムに基づいてURLを修正
+        if (fid := data['form-id']) > 0:
+            if data['id'] == prev_id and fid != prev_form_id + 1:
+                fid = prev_form_id + 1
+            url += f"-{fid}"
 
         try:
             res = requests.get(url)
             soup = BeautifulSoup(res.text, 'html.parser')
             s = soup.find(id='json-data').get_text()
         except:
-            print(f"{dict['alias']}: Failed to access {url}")
+            print(f"Failed to access zukan {data['alias']} : {url}")
             continue
-        
-        s = s[s.index('{'):s.rindex('}')+1]
-        d = json.loads(s)
 
-        zukan[key]['category'] = d['pokemon']['bunrui']
-        zukan[key]['weight'] = d['pokemon']['omosa']
-        zukan[key]['height'] = d['pokemon']['takasa']
-        for k in ['type_1', 'type_2']:
-            zukan[key][k] = zukan_types[d['pokemon'][k]]
+        json_text = s[s.index('{'):s.rindex('}')+1]
+        json_data = json.loads(json_text)
 
-        if zukan[key]['name'] == 'バケッチャ':
-            zukan[key]['weight'] = bakeccha_weight[zukan[key]['form']]
-            zukan[key]['height'] = bakeccha_height[zukan[key]['form']]
-        elif zukan[key]['name'] == 'パンプジン':
-            zukan[key]['weight'] = panpujin_weight[zukan[key]['form']]
-            zukan[key]['height'] = panpujin_height[zukan[key]['form']]
+        data['category'] = json_data['pokemon']['bunrui']
+        data['weight'] = json_data['pokemon']['omosa']
+        data['height'] = json_data['pokemon']['takasa']
+        for k in ['type-1', 'type-2']:
+            data[k] = zukan_types[json_data['pokemon'][k.replace("-", "_")]]
+        for i, abilities in enumerate(json_data['abilities']):
+            data[f"ability-{i+1}"] = abilities['name']
 
-        for i,da in enumerate(d['abilities']):
-            zukan[key][f"ability_{i+1}"] = da['name']
+        # 手動で情報を追加
+        if data['name'] == 'バケッチャ':
+            data['weight'] = bakeccha_weight[data['form']]
+            data['height'] = bakeccha_height[data['form']]
+        elif data['name'] == 'パンプジン':
+            data['weight'] = panpujin_weight[data['form']]
+            data['height'] = panpujin_height[data['form']]
 
-        print(zukan[key])
-        prev_id, prev_form_id = dict['id'], form_id
+        prev_id, prev_form_id = data['id'], fid
 
-def read_wiki(zukan):
-    """ポケモンWikiから特性と種族値を取得"""
-    ### 特性
+        print(f"公式図鑑から追記 {list(data.values())}")
+
+
+def update_zukan_with_wiki(zukan):
+    """
+    ポケモンWikiから、特性と種族値を取得して図鑑データに追記する
+    """
+    # 特性
     url = "https://wiki.xn--rckteqa2e.com/wiki/%E3%83%9D%E3%82%B1%E3%83%A2%E3%83%B3%E3%81%AE%E3%81%A8%E3%81%8F%E3%81%9B%E3%81%84%E4%B8%80%E8%A6%A7"
     res = requests.get(url)
     soup = BeautifulSoup(res.text, 'html.parser')
     table = soup.find('table')
 
-    abbr = {
+    form_abbr = {
         'A': 'アローラのすがた',
         'G': 'ガラルのすがた',
         'H': 'ヒスイのすがた',
         'P': 'パルデアのすがた',
     }
 
-    for i,tr in enumerate(table.find_all('tr')):
+    for i, tr in enumerate(table.find_all('tr')):
         if i == 0:
             continue
-        
+
         data = [td.text.strip() for td in tr.find_all('td')]
-        #print(data)
+        # print(data)
 
         # 名前とフォルムを取得
         name, form = data[1], ''
@@ -175,11 +202,11 @@ def read_wiki(zukan):
             name = data[1][:data[1].index('(')]
             form = data[1][data[1].index('(')+1:-1]
 
-        if name[-1] in ['A','G','H','P']:
-            form = abbr[name[-1]]
+        if name[-1] in ['A', 'G', 'H', 'P']:
+            form = form_abbr[name[-1]]
             name = name[:-1]
 
-        for mark, s in zip(['♂','♀'], ['オスのすがた','メスのすがた']):
+        for mark, s in zip(['♂', '♀'], ['オスのすがた', 'メスのすがた']):
             if name[-1] == mark and 'ニドラン' not in name:
                 name = name[:-1]
                 form = s
@@ -187,7 +214,7 @@ def read_wiki(zukan):
         name = mojimoji.han_to_zen(name)
         form = mojimoji.han_to_zen(form)
 
-        if name in ['カラナクシ','トリトドン','シキジカ','メブキジカ']:
+        if name in ['カラナクシ', 'トリトドン', 'シキジカ', 'メブキジカ']:
             form = ''
 
         # 図鑑に追加
@@ -197,7 +224,8 @@ def read_wiki(zukan):
                 matched &= d['form'] == form
 
             if matched:
-                abilities = [zukan[key][f"ability_{j+1}"] for j in range(3) if zukan[key][f"ability_{j+1}"]]
+                abilities = [
+                    zukan[key][f"ability-{j+1}"] for j in range(3) if zukan[key][f"ability-{j+1}"]]
                 for ability in data[2:5]:
                     if len(abilities) == 3:
                         break
@@ -208,49 +236,39 @@ def read_wiki(zukan):
                         if s in ability:
                             ability = ability[:ability.index(s)]
                     if ability not in abilities:
-                        zukan[key][f"ability_{len(abilities)+1}"] = ability
+                        zukan[key][f"ability-{len(abilities)+1}"] = ability
                         print(zukan[key]['alias'], ability, '追加')
 
-    ### 種族値
-    # 初期化
-    labels = ['H','A','B','C','D','S']
-    for key in zukan:
-        zukan[key]['last_gen'] = 0
-        for s in labels:
-            zukan[key][s] = 0
+    stat_labels = ['H', 'A', 'B', 'C', 'D', 'S']
 
-    # 古い世代から順にすべて参照する
-    urls = [
-        'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B8%80%E4%B8%96%E4%BB%A3)',
-        '',
-        'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B8%89%E4%B8%96%E4%BB%A3)',
-        'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E5%9B%9B%E4%B8%96%E4%BB%A3)',
-        'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%BA%94%E4%B8%96%E4%BB%A3)',
-        'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E5%85%AD%E4%B8%96%E4%BB%A3)',
-        'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B8%83%E4%B8%96%E4%BB%A3)',
-        'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E5%85%AB%E4%B8%96%E4%BB%A3)',
-        'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B9%9D%E4%B8%96%E4%BB%A3)',
-    ]
+    # 初期化
+    for key in zukan:
+        # 最後に登場した世代
+        zukan[key]['last_gen'] = 0
+        # 種族値
+        for s in stat_labels:
+            zukan[key][s] = 0
 
     zukan_names = [d['name'] for d in zukan.values()]
 
-    for g, url in enumerate(urls):
+    for g, url in enumerate(wiki_urls):
         if not url:
             continue
 
-        print(url)
+        print(f"{g+1}世代", url)
+
         res = requests.get(url)
         soup = BeautifulSoup(res.text, 'html.parser')
         table = soup.find('table')
 
-        for i,tr in enumerate(table.find_all('tr')):
+        for i, tr in enumerate(table.find_all('tr')):
             if i == 0:
                 continue
-            
-            data = [td.text.strip() for td in tr.find_all(['th','td'])]
-            #print(data)
 
-            # 名前とフォルムを取得
+            data = [td.text.strip() for td in tr.find_all(['th', 'td'])]
+            # print(data)
+
+            # 名前とフォルムの修正
             name, form = data[1], ''
 
             if '(' in name:
@@ -260,7 +278,7 @@ def read_wiki(zukan):
             if '・' in form:
                 form = form[:form.index('・')]
 
-            for mark, s in zip(['♂','♀'], ['オスのすがた','メスのすがた']):
+            for mark, s in zip(['♂', '♀'], ['オスのすがた', 'メスのすがた']):
                 if name[-1] == mark and 'ニドラン' not in name:
                     name = name[:-1]
                     form = s
@@ -286,43 +304,51 @@ def read_wiki(zukan):
                 matched = d['name'] == name
                 if form:
                     matched &= d['form'] == form
+
                 if matched:
+                    # 最後に登場した世代を記録
                     if f"メガ{d['name']}" in d['form']:
                         zukan[key]['last_gen'] = 7
                     elif "キョダイ" in d['form']:
                         zukan[key]['last_gen'] = 8
                     else:
                         zukan[key]['last_gen'] = g + 1
-                    for j,v in enumerate(data[4:10]):
-                        zukan[key][labels[j]] = int(v)
+
+                    # 種族値を記録
+                    for j, v in enumerate(data[4:10]):
+                        zukan[key][stat_labels[j]] = int(v)
+
 
 def dump(zukan):
     # json出力
-    with open(f'output/zukan.json', 'w', encoding='utf-8') as fout:
-        json.dump(zukan, fout, ensure_ascii=False)
+    with open(f'output/json/zukan.json', 'w', encoding='utf-8') as fout:
+        json.dump(zukan, fout, ensure_ascii=False, indent=4)
 
     # csv出力
-    with open(f'output/zukan.csv', 'w', encoding='utf-8') as fout:
+    with open(f'output/csv/zukan.csv', 'w', encoding='utf-8') as fout:
         df = pd.DataFrame(zukan)
         df.T.to_csv(fout, lineterminator='\n')
 
 
+def load_zukan() -> dict:
+    with open(f'output/json/zukan.json', encoding='utf-8') as fin:
+        return json.load(fin)
+
+
 if __name__ == '__main__':
-    #"""
-    # 1.ポケモンHOMEの内部データから辞書を生成
-    zukan = read_HOME()
-    dump(zukan) # 途中経過
+    if False:
+        # 1) ポケモンHOMEの内部データからデータ取得
+        zukan = create_zukan_from_HOME()
 
-    # 2.公式の図鑑サイトから情報を取得 (かなり時間がかかる)
-    read_official_zukan(zukan)
-    dump(zukan) # 途中経過
-    #"""
+        # 2) 公式の図鑑サイトからデータ取得 [かなり時間がかかる]
+        update_zukan_with_official_dex(zukan)
 
-    # 3.ポケモンWikiから夢特性と種族値を取得 (すこし時間がかかる)
-    #"""
-    with open(f'output/zukan.json', encoding='utf-8') as fin:
-        # 途中保存から再開
-        zukan = json.load(fin)
-    #"""
-    read_wiki(zukan)
-    dump(zukan) # 最終出力
+        # dump(zukan)  # 中間出力 (任意)
+
+    zukan = load_zukan()  # 途中から再開 (任意)
+
+    # 3) ポケモンWikiからデータ取得 [すこし時間がかかる]
+    update_zukan_with_wiki(zukan)
+
+    # 最終出力
+    dump(zukan)
