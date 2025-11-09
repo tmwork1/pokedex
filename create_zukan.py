@@ -35,6 +35,16 @@ wiki_urls = [
     'https://wiki.xn--rckteqa2e.com/wiki/%E7%A8%AE%E6%97%8F%E5%80%A4%E4%B8%80%E8%A6%A7_(%E7%AC%AC%E4%B9%9D%E4%B8%96%E4%BB%A3)',
 ]
 
+headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.google.com/",
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+}
+
 
 def create_zukan_from_HOME() -> dict:
     """
@@ -140,7 +150,7 @@ def update_zukan_with_official_dex(zukan: dict):
             url += f"-{fid}"
 
         try:
-            res = requests.get(url)
+            res = requests.get(url, headers=headers)
             soup = BeautifulSoup(res.text, 'html.parser')
             s = soup.find(id='json-data').get_text()
         except:
@@ -175,9 +185,10 @@ def update_zukan_with_wiki(zukan):
     """
     ポケモンWikiから、特性と種族値を取得して図鑑データに追記する
     """
-    # 特性
+
+    # 特性の取得
     url = "https://wiki.xn--rckteqa2e.com/wiki/%E3%83%9D%E3%82%B1%E3%83%A2%E3%83%B3%E3%81%AE%E3%81%A8%E3%81%8F%E3%81%9B%E3%81%84%E4%B8%80%E8%A6%A7"
-    res = requests.get(url)
+    res = requests.get(url, headers=headers)
     soup = BeautifulSoup(res.text, 'html.parser')
     table = soup.find('table')
 
@@ -237,9 +248,11 @@ def update_zukan_with_wiki(zukan):
                             ability = ability[:ability.index(s)]
                     if ability not in abilities:
                         zukan[key][f"ability-{len(abilities)+1}"] = ability
-                        print(zukan[key]['alias'], ability, '追加')
+                        print(f"\tAdded {ability} to", zukan[key]['alias'])
 
     stat_labels = ['H', 'A', 'B', 'C', 'D', 'S']
+
+    # 種族値などの取得
 
     # 初期化
     for key in zukan:
@@ -255,9 +268,9 @@ def update_zukan_with_wiki(zukan):
         if not url:
             continue
 
-        print(f"{g+1}世代", url)
+        print(f"{g+1}th generation", url)
 
-        res = requests.get(url)
+        res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
         table = soup.find('table')
 
